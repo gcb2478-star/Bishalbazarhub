@@ -1,0 +1,1264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Advanced CSV Data Analyzer (Client-Side)</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.7.1/dist/chart.min.js"></script>
+
+    <style>
+        :root {
+            --primary-color: #007bff;
+            --primary-hover: #0056b3;
+            --background-color: #f8f9fa;
+            --card-background: #ffffff;
+            --text-color: #343a40;
+            --border-color: #dee2e6;
+            --anomaly-color: #dc3545;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: var(--background-color);
+            color: var(--text-color);
+            line-height: 1.6;
+        }
+
+        header {
+            background: var(--primary-color);
+            color: white;
+            padding: 20px 0;
+            text-align: center;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        header h1 {
+            margin: 0;
+            font-size: 2.2em;
+        }
+
+        header p {
+            margin: 5px 0 0;
+            font-size: 0.9em;
+            opacity: 0.9;
+        }
+
+        .container {
+            padding: 20px;
+            max-width: 1400px;
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+        }
+
+        .card {
+            background: var(--card-background);
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+            border: 1px solid var(--border-color);
+            grid-column: span 1;
+        }
+
+        .card.wide {
+            grid-column: 1 / -1; /* Spans all columns */
+        }
+
+        h2, h3 {
+            color: var(--primary-color);
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 10px;
+            margin-top: 0;
+            font-weight: 600;
+        }
+
+        h3 {
+            font-size: 1.2em;
+            color: var(--text-color);
+            border-bottom: none;
+            margin-top: 20px;
+        }
+
+        /* --- Form Elements --- */
+        .input-group {
+            margin-bottom: 15px;
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .input-group label {
+            font-weight: 500;
+        }
+
+        input[type="file"], input[type="text"], select, button {
+            padding: 10px 15px;
+            border-radius: 4px;
+            border: 1px solid var(--border-color);
+            font-size: 1em;
+            flex-grow: 1;
+            max-width: 100%;
+            box-sizing: border-box;
+        }
+
+        button {
+            cursor: pointer;
+            background-color: var(--primary-color);
+            color: white;
+            font-weight: 600;
+            transition: background-color 0.2s;
+            flex-grow: 0;
+        }
+
+        button:hover:not(:disabled) {
+            background-color: var(--primary-hover);
+        }
+
+        button:disabled {
+            background-color: #a0c3e6;
+            cursor: not-allowed;
+        }
+
+        /* --- Tables --- */
+        .table-container {
+            max-height: 400px; /* Max height for scrollable tables */
+            overflow-y: auto;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            margin-top: 10px;
+        }
+
+        .table-container.small {
+            max-height: 300px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.9em;
+        }
+
+        th, td {
+            padding: 12px 15px;
+            text-align: left;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        th {
+            background-color: #e9ecef;
+            color: var(--text-color);
+            position: sticky;
+            top: 0; /* Sticky header */
+            z-index: 10;
+        }
+
+        tr:nth-child(even) {
+            background-color: #f8f9fa;
+        }
+
+        /* Highlight anomaly rows */
+        tr.anomaly-row {
+            background-color: #f8d7da !important;
+            color: var(--anomaly-color);
+            font-weight: 600;
+        }
+
+        /* --- Badges/Labels --- */
+        .badge {
+            display: inline-block;
+            padding: 0.25em 0.5em;
+            font-size: 75%;
+            font-weight: 700;
+            line-height: 1;
+            text-align: center;
+            white-space: nowrap;
+            vertical-align: baseline;
+            border-radius: 0.375rem;
+            color: white;
+            background-color: var(--primary-color);
+            margin-left: 10px;
+        }
+
+        .badge.red {
+            background-color: var(--anomaly-color);
+        }
+
+        /* --- Footer --- */
+        footer {
+            text-align: center;
+            padding: 15px;
+            margin-top: 20px;
+            color: #6c757d;
+            font-size: 0.9em;
+        }
+
+        /* --- Stats Table --- */
+        #stats-output table {
+            margin-top: 10px;
+        }
+
+        #stats-output th {
+            background-color: #f1f3f5;
+            color: var(--primary-color);
+        }
+
+        /* --- Chart Canvas Styling --- */
+        #main-chart, #trend-chart {
+            background: var(--card-background);
+            padding: 10px;
+            border-radius: 4px;
+            border: 1px solid var(--border-color);
+            margin-top: 15px;
+        }
+
+        /* Responsive adjustments */
+        @media (max-width: 768px) {
+            .container {
+                grid-template-columns: 1fr;
+                padding: 10px;
+            }
+            
+            .card.wide {
+                grid-column: 1 / 1;
+            }
+            
+            input[type="text"], select, button {
+                margin-bottom: 5px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>🔬 Client-Side Data Analyzer</h1>
+        <p>CSV Processing, Statistics, Anomaly Detection, & Visualization (HTML/CSS/JS ONLY)</p>
+    </header>
+
+    <main class="container">
+        <section id="input-panel" class="card">
+            <h2>📥 CSV Upload & Configuration</h2>
+            <input type="file" id="csv-file-input" accept=".csv" required>
+            <div class="input-group">
+                <label for="delimiter-input">Delimiter:</label>
+                <input type="text" id="delimiter-input" value="," maxlength="1">
+            </div>
+            <div class="input-group">
+                <label>
+                    <input type="checkbox" id="header-checkbox" checked>
+                    File has headers
+                </label>
+            </div>
+            <button id="load-csv-button">Load & Analyze CSV</button>
+        </section>
+
+        <div id="dashboard" style="display: none;">
+            
+            <section class="card wide">
+                <h2>📊 Data Preview <span id="data-preview-count" class="badge">0 Rows</span></h2>
+                <div id="data-preview-table-container" class="table-container">
+                    <p>Upload a CSV to see the full data preview here.</p>
+                </div>
+            </section>
+            
+            <section class="card wide">
+                <h2>📈 Column Statistics & Types</h2>
+                <div id="stats-output">
+                    <p>Statistics will appear here after loading the data.</p>
+                </div>
+            </section>
+            
+            <section class="card wide">
+                <h2>🚨 Anomaly Detection <span id="anomaly-count-badge" class="badge red">0 Anomalies</span></h2>
+                <div class="input-group">
+                    <label for="anomaly-method-select">Detection Method:</label>
+                    <select id="anomaly-method-select">
+                        <option value="IQR">IQR Rule (1.5x IQR)</option>
+                        <option value="Z_SCORE">Z-Score ( |Z| > 3 )</option>
+                        <option value="BOTH">Both Methods</option>
+                    </select>
+                    <button id="run-anomaly-detection">Re-Run Detection</button>
+                    <button id="download-anomalies-button" disabled>Download Anomalies CSV</button>
+                </div>
+                
+                <h3>Anomalous Rows</h3>
+                <div id="anomalous-data-table-container" class="table-container small">
+                    <p>No anomalies detected yet.</p>
+                </div>
+                
+                <h3>Normal Rows</h3>
+                <div id="normal-data-table-container" class="table-container small">
+                    <p>Normal data will appear here.</p>
+                </div>
+            </section>
+            
+            <section class="card">
+                <h2>🔎 Data Filtering</h2>
+                <p>Example: <code>Age > 30 &amp;&amp; Country === "Nepal"</code></p>
+                <input type="text" id="filter-condition-input" placeholder="Enter JavaScript filter condition">
+                <button id="run-filter-button">Apply Filter</button>
+                <button id="download-filtered-button" disabled>Download Filtered CSV</button>
+                
+                <h3>Filtered Data <span id="filtered-data-count" class="badge">0 Rows</span></h3>
+                <div id="filtered-data-table-container" class="table-container small">
+                    <p>Filter results will appear here.</p>
+                </div>
+            </section>
+            
+            <section class="card">
+                <h2>🧮 Group By & Aggregate</h2>
+                <div class="input-group">
+                    <label for="group-by-select">Group By:</label>
+                    <select id="group-by-select"></select>
+                </div>
+                <div class="input-group">
+                    <label for="aggregate-value-select">Value Column:</label>
+                    <select id="aggregate-value-select"></select>
+                </div>
+                <div class="input-group">
+                    <label for="aggregation-type-select">Aggregation:</label>
+                    <select id="aggregation-type-select">
+                        <option value="COUNT">COUNT</option>
+                        <option value="SUM">SUM</option>
+                        <option value="AVERAGE">AVERAGE</option>
+                    </select>
+                    <button id="run-group-by-button">Run Grouping</button>
+                </div>
+                
+                <h3>Grouped Results</h3>
+                <div id="grouped-data-table-container" class="table-container small">
+                    <p>Grouped results will appear here.</p>
+                </div>
+            </section>
+            
+            <section class="card wide">
+                <h2>⏳ Date/Time Trend Analysis</h2>
+                <div class="input-group">
+                    <label for="date-column-select">Date Column:</label>
+                    <select id="date-column-select"></select>
+                    <label for="trend-period-select">Period:</label>
+                    <select id="trend-period-select">
+                        <option value="daily">Daily</option>
+                        <option value="monthly">Monthly</option>
+                        <option value="yearly">Yearly</option>
+                    </select>
+                    <label for="trend-value-select">Value Column:</label>
+                    <select id="trend-value-select"></select>
+                    <button id="run-trend-button">Generate Trend</button>
+                </div>
+                
+                <canvas id="trend-chart" width="800" height="300"></canvas>
+                
+                <h3>Time Series Table</h3>
+                <div id="time-series-table-container" class="table-container small">
+                    <p>Time series data will appear here.</p>
+                </div>
+            </section>
+
+            <section class="card wide">
+                <h2>🖼️ Visualizations (Chart.js)</h2>
+                <div class="input-group">
+                    <label for="chart-column-select">Select Column:</label>
+                    <select id="chart-column-select"></select>
+                    <button id="generate-chart-button">Generate Chart</button>
+                </div>
+                <canvas id="main-chart" width="800" height="300"></canvas>
+                <div id="chart-info"></div>
+            </section>
+
+        </div>
+    </main>
+
+    <footer>
+        <p>&copy; 2025 Client-Side Data Analyzer | Pure HTML, CSS, & JavaScript</p>
+    </footer>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // --- Global Variables ---
+            let originalData = [];
+            let headers = [];
+            let columnTypes = {};
+            let columnStats = {};
+            let anomalousRows = [];
+            let normalRows = [];
+            let chartInstance = null;
+            let trendChartInstance = null;
+
+            // --- DOM Elements ---
+            const fileInput = document.getElementById('csv-file-input');
+            const loadCsvButton = document.getElementById('load-csv-button');
+            const delimiterInput = document.getElementById('delimiter-input');
+            const headerCheckbox = document.getElementById('header-checkbox');
+            const dashboard = document.getElementById('dashboard');
+            const dataPreviewContainer = document.getElementById('data-preview-table-container');
+            const dataPreviewCount = document.getElementById('data-preview-count');
+            const statsOutput = document.getElementById('stats-output');
+            const anomalyMethodSelect = document.getElementById('anomaly-method-select');
+            const runAnomalyDetectionButton = document.getElementById('run-anomaly-detection');
+            const anomalyCountBadge = document.getElementById('anomaly-count-badge');
+            const anomalousDataContainer = document.getElementById('anomalous-data-table-container');
+            const normalDataContainer = document.getElementById('normal-data-table-container');
+            const downloadAnomaliesButton = document.getElementById('download-anomalies-button');
+            const filterConditionInput = document.getElementById('filter-condition-input');
+            const runFilterButton = document.getElementById('run-filter-button');
+            const filteredDataContainer = document.getElementById('filtered-data-table-container');
+            const filteredDataCount = document.getElementById('filtered-data-count');
+            const downloadFilteredButton = document.getElementById('download-filtered-button');
+            const groupBySelect = document.getElementById('group-by-select');
+            const aggregateValueSelect = document.getElementById('aggregate-value-select');
+            const aggregationTypeSelect = document.getElementById('aggregation-type-select');
+            const runGroupByButton = document.getElementById('run-group-by-button');
+            const groupedDataContainer = document.getElementById('grouped-data-table-container');
+            const chartColumnSelect = document.getElementById('chart-column-select');
+            const generateChartButton = document.getElementById('generate-chart-button');
+            const mainChartCanvas = document.getElementById('main-chart');
+            const dateColumnSelect = document.getElementById('date-column-select');
+            const trendPeriodSelect = document.getElementById('trend-period-select');
+            const trendValueSelect = document.getElementById('trend-value-select');
+            const runTrendButton = document.getElementById('run-trend-button');
+            const timeSeriesTableContainer = document.getElementById('time-series-table-container');
+            const chartInfo = document.getElementById('chart-info');
+
+
+            // --- Utility Functions ---
+
+            /**
+             * Attempts to parse a value as a number. Returns the number or null.
+             * @param {string} value 
+             * @returns {number | null}
+             */
+            const parseNumber = (value) => {
+                if (value === null || value === undefined || value.trim() === '') return null;
+                const num = Number(String(value).replace(/,/g, '').trim()); // Handle comma thousands separator
+                return isNaN(num) ? null : num;
+            };
+
+            /**
+             * Attempts to parse a value as a Date object. Returns the Date or null.
+             * @param {string} value 
+             * @returns {Date | null}
+             */
+            const parseDate = (value) => {
+                if (value === null || value === undefined || value.trim() === '') return null;
+                const date = new Date(value);
+                // Check if the date is valid and the year is plausible (e.g., after 1900)
+                if (isNaN(date) || date.getFullYear() < 1900) return null;
+                return date;
+            };
+
+            /**
+             * Determines the type of a column based on a sample of values.
+             * @param {Array<string>} values 
+             * @returns {'numeric' | 'date' | 'categorical'}
+             */
+            const detectColumnType = (values) => {
+                const sample = values.slice(0, 50); // Sample the first 50 rows
+                let numericCount = 0;
+                let dateCount = 0;
+                let nonNullCount = 0;
+
+                for (const val of sample) {
+                    if (val !== null && val !== undefined && String(val).trim() !== '') {
+                        nonNullCount++;
+                        if (parseNumber(val) !== null) {
+                            numericCount++;
+                        }
+                        if (parseDate(val) !== null) {
+                            dateCount++;
+                        }
+                    }
+                }
+
+                if (nonNullCount === 0) return 'categorical'; // Default for empty column
+
+                // Prioritize Date, then Numeric, then Categorical
+                if (dateCount / nonNullCount > 0.8) {
+                    return 'date';
+                }
+                if (numericCount / nonNullCount > 0.8) {
+                    return 'numeric';
+                }
+
+                return 'categorical';
+            };
+
+            /**
+             * Generates an HTML table from an array of objects.
+             * @param {Array<Object>} data 
+             * @param {Array<string>} headers 
+             * @returns {string} HTML table string
+             */
+            const generateTableHTML = (data, headers) => {
+                if (data.length === 0) return '<p>No data to display.</p>';
+
+                let html = '<table><thead><tr>';
+                headers.forEach(h => { html += `<th>${h}</th>`; });
+                html += '</tr></thead><tbody>';
+
+                data.forEach(row => {
+                    const isAnomaly = row.__is_anomaly; // Check internal flag for CSS
+                    html += `<tr${isAnomaly ? ' class="anomaly-row"' : ''}>`;
+                    headers.forEach(h => {
+                        html += `<td>${row[h] !== undefined && row[h] !== null ? row[h] : ''}</td>`;
+                    });
+                    html += '</tr>';
+                });
+
+                html += '</tbody></table>';
+                return html;
+            };
+
+            /**
+             * Clears and populates a dropdown select element with column headers.
+             * @param {HTMLElement} selectElement 
+             * @param {Array<string>} headers 
+             * @param {Array<string>} requiredTypes - Filter for specific types ('numeric', 'date', 'categorical')
+             */
+            const populateColumnSelect = (selectElement, headers, requiredTypes = null) => {
+                selectElement.innerHTML = ''; // Clear previous options
+                selectElement.disabled = true;
+
+                if (headers.length === 0) return;
+                
+                let hasOptions = false;
+                headers.forEach(h => {
+                    const type = columnTypes[h];
+                    if (!requiredTypes || requiredTypes.includes(type)) {
+                        const option = document.createElement('option');
+                        option.value = h;
+                        option.textContent = `${h} (${type})`;
+                        selectElement.appendChild(option);
+                        hasOptions = true;
+                    }
+                });
+
+                selectElement.disabled = !hasOptions;
+            };
+
+            /**
+             * Calculates the mean of an array of numbers.
+             * @param {Array<number>} arr 
+             * @returns {number}
+             */
+            const calculateMean = (arr) => arr.reduce((a, b) => a + b, 0) / arr.length;
+
+            /**
+             * Calculates the standard deviation of an array of numbers.
+             * @param {Array<number>} arr 
+             * @param {number} mean 
+             * @returns {number}
+             */
+            const calculateStdDev = (arr, mean) => {
+                const squaredDiffs = arr.map(x => Math.pow(x - mean, 2));
+                const variance = calculateMean(squaredDiffs);
+                return Math.sqrt(variance);
+            };
+
+            /**
+             * Calculates the quartile value (e.g., Q1, Q2, Q3) for an array of numbers.
+             * @param {Array<number>} sortedArr - The sorted array.
+             * @param {number} percentile - The percentile (0.25 for Q1, 0.5 for Q2, 0.75 for Q3).
+             * @returns {number}
+             */
+            const calculateQuartile = (sortedArr, percentile) => {
+                if (sortedArr.length === 0) return NaN;
+                const index = percentile * (sortedArr.length - 1);
+                const floor = Math.floor(index);
+                const ceil = Math.ceil(index);
+
+                if (floor === ceil) return sortedArr[floor];
+
+                const d0 = sortedArr[floor];
+                const d1 = sortedArr[ceil];
+                return d0 + (d1 - d0) * (index - floor);
+            };
+
+            /**
+             * Finds the mode(s) of an array.
+             * @param {Array<any>} arr
+             * @returns {Array<any>}
+             */
+            const calculateMode = (arr) => {
+                const counts = {};
+                let maxCount = 0;
+                let modes = [];
+
+                arr.forEach(val => {
+                    const key = String(val); // Use string representation for counting
+                    counts[key] = (counts[key] || 0) + 1;
+                    if (counts[key] > maxCount) {
+                        maxCount = counts[key];
+                    }
+                });
+
+                for (const key in counts) {
+                    if (counts[key] === maxCount && maxCount > 1) {
+                        // Attempt to return original type if numeric/non-string
+                        const num = parseNumber(key);
+                        modes.push(num !== null ? num : key);
+                    }
+                }
+
+                return modes.length > 0 ? modes : ['N/A'];
+            };
+
+            /**
+             * Creates a downloadable CSV file from an array of objects.
+             * @param {Array<Object>} data 
+             * @param {Array<string>} headers 
+             * @param {string} filename 
+             */
+            const downloadCSV = (data, headers, filename) => {
+                const csvData = data.map(row => headers.map(h => {
+                    let value = row[h] === undefined || row[h] === null ? '' : String(row[h]);
+                    // Enclose in double quotes if the value contains commas, newlines, or double quotes
+                    if (value.includes(',') || value.includes('\n') || value.includes('"')) {
+                        value = `"${value.replace(/"/g, '""')}"`;
+                    }
+                    return value;
+                }));
+
+                const csvContent = [
+                    headers.join(','),
+                    ...csvData.map(e => e.join(','))
+                ].join('\n');
+
+                const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                const link = document.createElement('a');
+                link.href = URL.createObjectURL(blob);
+                link.download = filename;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            };
+
+            // --- Core Logic Functions ---
+
+            /**
+             * Step 1 & 2: Parse CSV and initiate main analysis pipeline.
+             */
+            const handleCsvUpload = () => {
+                const file = fileInput.files[0];
+                if (!file) {
+                    alert('Please select a CSV file.');
+                    return;
+                }
+
+                const delimiter = delimiterInput.value || ',';
+                const hasHeader = headerCheckbox.checked;
+
+                Papa.parse(file, {
+                    header: hasHeader,
+                    dynamicTyping: false,
+                    skipEmptyLines: true,
+                    delimiter: delimiter,
+                    complete: (results) => {
+                        if (results.errors.length) {
+                            console.error("PapaParse Errors:", results.errors);
+                            alert(`CSV Parsing Error: ${results.errors[0].message}`);
+                            return;
+                        }
+                        
+                        originalData = results.data;
+                        headers = results.meta.fields || Object.keys(originalData[0] || {});
+                        
+                        if (originalData.length === 0) {
+                             alert('The CSV file is empty or headers could not be determined.');
+                             return;
+                        }
+
+                        // Sanitize headers: remove empty/null headers
+                        headers = headers.filter(h => h !== null && h !== undefined && h.trim() !== '');
+
+                        // Initial processing
+                        detectAndCalculateStats();
+                        displayDataPreview(originalData);
+                        populateControlPanels();
+                        
+                        // Default Anomaly Detection
+                        runAnomalyDetection(); 
+
+                        dashboard.style.display = 'grid'; // Show the dashboard
+                    }
+                });
+            };
+
+            /**
+             * Step 2 & 3: Detect column types and calculate descriptive statistics.
+             */
+            const detectAndCalculateStats = () => {
+                columnTypes = {};
+                columnStats = {};
+                statsOutput.innerHTML = '';
+                
+                const statsTable = document.createElement('table');
+                statsTable.innerHTML = `<thead><tr>
+                    <th>Column</th>
+                    <th>Type</th>
+                    <th>Mean/Unique</th>
+                    <th>Median/Counts</th>
+                    <th>StdDev/Earliest</th>
+                    <th>IQR/Latest</th>
+                    <th>Q1/Q3</th>
+                </tr></thead><tbody></tbody>`;
+                const tbody = statsTable.querySelector('tbody');
+
+                headers.forEach(header => {
+                    const rawValues = originalData.map(row => row[header] !== undefined && row[header] !== null ? String(row[header]) : '');
+                    const type = detectColumnType(rawValues);
+                    columnTypes[header] = type;
+                    let stats = {};
+                    let rowHtml = `<td>${header}</td><td>${type}</td>`;
+
+                    if (type === 'numeric') {
+                        const numericValues = rawValues
+                            .map(parseNumber)
+                            .filter(val => val !== null)
+                            .sort((a, b) => a - b);
+
+                        if (numericValues.length > 0) {
+                            const mean = calculateMean(numericValues);
+                            const stdDev = calculateStdDev(numericValues, mean);
+                            const q1 = calculateQuartile(numericValues, 0.25);
+                            const median = calculateQuartile(numericValues, 0.50);
+                            const q3 = calculateQuartile(numericValues, 0.75);
+                            const iqr = q3 - q1;
+                            const min = numericValues[0];
+                            const max = numericValues[numericValues.length - 1];
+                            const mode = calculateMode(numericValues);
+
+                            stats = {
+                                mean: mean,
+                                median: median,
+                                stdDev: stdDev,
+                                q1: q1,
+                                q3: q3,
+                                iqr: iqr,
+                                min: min,
+                                max: max,
+                                mode: mode,
+                                values: numericValues // Store for anomaly detection
+                            };
+                            
+                            rowHtml += `
+                                <td>${mean.toFixed(2)}</td>
+                                <td>${median.toFixed(2)}</td>
+                                <td>${stdDev.toFixed(2)}</td>
+                                <td>${iqr.toFixed(2)}</td>
+                                <td>Q1: ${q1.toFixed(2)} / Q3: ${q3.toFixed(2)}</td>
+                            `;
+                        } else {
+                             rowHtml += `<td>N/A</td><td>N/A</td><td>N/A</td><td>N/A</td><td>N/A</td>`;
+                        }
+
+                    } else if (type === 'categorical') {
+                        const counts = {};
+                        rawValues.forEach(val => {
+                            if (val.trim() !== '') {
+                                counts[val] = (counts[val] || 0) + 1;
+                            }
+                        });
+                        const uniqueValues = Object.keys(counts);
+                        const nonNullValues = rawValues.filter(v => v.trim() !== '');
+                        const mode = calculateMode(nonNullValues);
+
+                        stats = {
+                            uniqueValues: uniqueValues.length,
+                            counts: counts,
+                            mode: mode
+                        };
+
+                        const countString = Object.keys(counts).length > 0 ? Object.keys(counts).map(k => `${k}: ${counts[k]}`).join(', ').substring(0, 50) + '...' : 'N/A';
+                        
+                        rowHtml += `
+                            <td>${stats.uniqueValues} unique</td>
+                            <td>${countString}</td>
+                            <td>Mode: ${stats.mode.join(', ')}</td>
+                            <td>N/A</td>
+                            <td>N/A</td>
+                        `;
+
+                    } else if (type === 'date') {
+                        const dateObjects = rawValues
+                            .map(parseDate)
+                            .filter(d => d !== null)
+                            .sort((a, b) => a.getTime() - b.getTime());
+
+                        let earliest = 'N/A';
+                        let latest = 'N/A';
+
+                        if (dateObjects.length > 0) {
+                            earliest = dateObjects[0].toLocaleDateString();
+                            latest = dateObjects[dateObjects.length - 1].toLocaleDateString();
+                            
+                            stats = {
+                                earliest: earliest,
+                                latest: latest,
+                                values: dateObjects
+                            };
+                        }
+
+                        rowHtml += `
+                            <td>${dateObjects.length} valid dates</td>
+                            <td>N/A</td>
+                            <td>${earliest}</td>
+                            <td>${latest}</td>
+                            <td>N/A</td>
+                        `;
+                    }
+                    
+                    const row = tbody.insertRow();
+                    row.innerHTML = rowHtml;
+                    columnStats[header] = stats;
+                });
+
+                statsOutput.appendChild(statsTable);
+            };
+
+            /**
+             * Displays the main data table preview.
+             * @param {Array<Object>} data 
+             */
+            const displayDataPreview = (data) => {
+                dataPreviewContainer.innerHTML = generateTableHTML(data, headers);
+                dataPreviewCount.textContent = `${data.length} Rows`;
+            };
+
+            /**
+             * Step 4: Detects anomalies using the selected method.
+             */
+            const runAnomalyDetection = () => {
+                const method = anomalyMethodSelect.value;
+                const anomalies = [];
+                const normal = [];
+                const numericHeaders = headers.filter(h => columnTypes[h] === 'numeric');
+                
+                // 1. Pre-calculate Column Bounds/Metrics
+                const anomalyMetrics = {};
+                numericHeaders.forEach(header => {
+                    const stats = columnStats[header];
+                    if (!stats.values || stats.values.length < 5) return; // Need enough data
+
+                    const mean = stats.mean;
+                    const stdDev = stats.stdDev;
+                    const q1 = stats.q1;
+                    const q3 = stats.q3;
+                    const iqr = stats.iqr;
+
+                    anomalyMetrics[header] = {
+                        // Z-Score
+                        mean,
+                        stdDev,
+                        // IQR
+                        lowerBound: q1 - 1.5 * iqr,
+                        upperBound: q3 + 1.5 * iqr
+                    };
+                });
+
+                // 2. Iterate through each row and check for anomalies
+                originalData.forEach((row) => {
+                    let isAnomaly = false;
+
+                    numericHeaders.forEach(header => {
+                        const metrics = anomalyMetrics[header];
+                        if (!metrics) return;
+
+                        const value = parseNumber(row[header]);
+                        if (value === null) return;
+
+                        let isColAnomaly = false;
+
+                        // Z-SCORE check
+                        if ((method === 'Z_SCORE' || method === 'BOTH') && metrics.stdDev > 0) {
+                            const zScore = Math.abs((value - metrics.mean) / metrics.stdDev);
+                            if (zScore > 3) {
+                                isColAnomaly = true;
+                            }
+                        }
+
+                        // IQR check
+                        if (method === 'IQR' || method === 'BOTH') {
+                            if (value < metrics.lowerBound || value > metrics.upperBound) {
+                                isColAnomaly = true;
+                            }
+                        }
+
+                        if (isColAnomaly) {
+                            isAnomaly = true;
+                        }
+                    });
+
+                    // Mark the row and push to the correct array
+                    const rowCopy = { ...row };
+                    rowCopy.__is_anomaly = isAnomaly; // Internal flag for CSS/filtering
+
+                    if (isAnomaly) {
+                        anomalies.push(rowCopy);
+                    } else {
+                        normal.push(rowCopy);
+                    }
+                });
+
+                anomalousRows = anomalies;
+                normalRows = normal;
+
+                // 3. Display Results
+                anomalyCountBadge.textContent = `${anomalousRows.length} Anomalies`;
+                downloadAnomaliesButton.disabled = anomalousRows.length === 0;
+
+                anomalousDataContainer.innerHTML = generateTableHTML(anomalousRows, headers);
+                normalDataContainer.innerHTML = generateTableHTML(normalRows, headers);
+            };
+
+            /**
+             * Step 5: Filters the data based on a user-defined JavaScript expression.
+             */
+            const runFilter = () => {
+                const condition = filterConditionInput.value.trim();
+                if (!condition) {
+                    alert('Please enter a filter condition.');
+                    return;
+                }
+
+                let filteredData = [];
+                try {
+                    // Create a function from the user's condition string
+                    // eslint-disable-next-line no-new-func
+                    const filterFunction = new Function('row', `
+                        // Map column headers to a temporary object for safe evaluation
+                        const data = {};
+                        for (const key in row) {
+                            // Treat numeric columns as numbers, others as strings
+                            if (columnTypes[key] === 'numeric') {
+                                 const val = row[key];
+                                 const n = parseNumber(val);
+                                 data[key] = n !== null ? n : NaN; // Use NaN for non-comparable values
+                            } else {
+                                data[key] = row[key] === undefined || row[key] === null ? '' : String(row[key]);
+                            }
+                        }
+
+                        // Eval the condition against the data object
+                        try {
+                            with(data) {
+                                return ${condition};
+                            }
+                        } catch (e) {
+                            // Suppress individual row errors, return false
+                            return false; 
+                        }
+                    `);
+
+                    filteredData = originalData.filter(row => filterFunction(row));
+
+                    filteredDataContainer.innerHTML = generateTableHTML(filteredData, headers);
+                    filteredDataCount.textContent = `${filteredData.length} Rows`;
+                    downloadFilteredButton.disabled = filteredData.length === 0;
+
+                } catch (e) {
+                    alert('Invalid filter condition syntax. Check the JavaScript expression.');
+                    console.error('Filter function creation error:', e);
+                }
+            };
+
+            /**
+             * Step 6: Groups data and performs aggregation.
+             */
+            const runGroupBy = () => {
+                const groupByCol = groupBySelect.value;
+                const aggregateValueCol = aggregateValueSelect.value;
+                const aggregationType = aggregationTypeSelect.value;
+
+                if (!groupByCol || !aggregateValueCol) {
+                    alert('Please select both a Group By column and a Value column.');
+                    return;
+                }
+
+                const groupedMap = new Map();
+
+                originalData.forEach(row => {
+                    const groupKey = row[groupByCol];
+                    const aggValue = parseNumber(row[aggregateValueCol]);
+                    
+                    if (groupKey === undefined || groupKey === null) return;
+
+                    if (!groupedMap.has(groupKey)) {
+                        groupedMap.set(groupKey, { 
+                            COUNT: 0, 
+                            SUM: 0, 
+                            validValueCount: 0 
+                        });
+                    }
+
+                    const group = groupedMap.get(groupKey);
+                    group.COUNT++;
+                    if (aggValue !== null) {
+                        group.SUM += aggValue;
+                        group.validValueCount++;
+                    }
+                });
+
+                const groupedResults = Array.from(groupedMap, ([key, value]) => {
+                    const result = {
+                        [groupByCol]: key,
+                        'COUNT': value.COUNT
+                    };
+
+                    if (aggregationType === 'SUM') {
+                        result[`SUM(${aggregateValueCol})`] = value.SUM.toFixed(2);
+                    } else if (aggregationType === 'AVERAGE') {
+                        const avg = value.validValueCount > 0 ? (value.SUM / value.validValueCount) : 0;
+                        result[`AVERAGE(${aggregateValueCol})`] = avg.toFixed(2);
+                    }
+
+                    return result;
+                });
+
+                const groupHeaders = [groupByCol, 'COUNT'];
+                if (aggregationType !== 'COUNT') {
+                    groupHeaders.push(aggregationType === 'SUM' ? `SUM(${aggregateValueCol})` : `AVERAGE(${aggregateValueCol})`);
+                }
+
+                groupedDataContainer.innerHTML = generateTableHTML(groupedResults, groupHeaders);
+            };
+
+            /**
+             * Step 7: Date/Time Trend Analysis
+             */
+            const runTrendAnalysis = () => {
+                const dateCol = dateColumnSelect.value;
+                const valueCol = trendValueSelect.value;
+                const period = trendPeriodSelect.value;
+
+                if (!dateCol || !valueCol) {
+                    alert('Please select both a Date column and a Numeric Value column for trend analysis.');
+                    return;
+                }
+
+                const trendMap = new Map();
+                
+                originalData.forEach(row => {
+                    const date = parseDate(row[dateCol]);
+                    const value = parseNumber(row[valueCol]);
+
+                    if (date === null || value === null) return;
+
+                    let key;
+                    if (period === 'daily') {
+                        key = date.toISOString().substring(0, 10); // YYYY-MM-DD
+                    } else if (period === 'monthly') {
+                        key = date.toISOString().substring(0, 7); // YYYY-MM
+                    } else { // yearly
+                        key = date.getFullYear().toString(); // YYYY
+                    }
+
+                    if (!trendMap.has(key)) {
+                        trendMap.set(key, { sum: 0, count: 0 });
+                    }
+
+                    const trend = trendMap.get(key);
+                    trend.sum += value;
+                    trend.count++;
+                });
+
+                const timeSeries = Array.from(trendMap, ([key, value]) => ({
+                    Period: key,
+                    Total: value.sum.toFixed(2),
+                    Count: value.count,
+                    Average: (value.sum / value.count).toFixed(2)
+                })).sort((a, b) => a.Period.localeCompare(b.Period)); // Sort by date
+
+                // Display Table
+                timeSeriesTableContainer.innerHTML = generateTableHTML(timeSeries, ['Period', 'Total', 'Count', 'Average']);
+
+                // Generate Line Chart
+                if (trendChartInstance) {
+                    trendChartInstance.destroy();
+                }
+
+                const ctx = document.getElementById('trend-chart').getContext('2d');
+                trendChartInstance = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: timeSeries.map(item => item.Period),
+                        datasets: [{
+                            label: `Average ${valueCol} (${period})`,
+                            data: timeSeries.map(item => parseFloat(item.Average)),
+                            borderColor: 'rgba(75, 192, 192, 1)',
+                            backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                            fill: false,
+                            tension: 0.1
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: {
+                            x: { title: { display: true, text: 'Time Period' } },
+                            y: { title: { display: true, text: `Average ${valueCol}` } }
+                        }
+                    }
+                });
+            };
+
+            /**
+             * Step 8: Generates visualizations (Histogram/Bar Chart) using Chart.js.
+             */
+            const generateChart = () => {
+                const column = chartColumnSelect.value;
+                if (!column) return;
+
+                if (chartInstance) {
+                    chartInstance.destroy();
+                }
+
+                const type = columnTypes[column];
+                const ctx = mainChartCanvas.getContext('2d');
+                const chartData = {};
+                let chartType = '';
+                let infoText = '';
+
+                if (type === 'numeric') {
+                    chartType = 'bar';
+                    infoText = 'Histogram: Data is grouped into bins to show distribution.';
+                    const numericValues = originalData.map(row => parseNumber(row[column])).filter(val => val !== null);
+                    if (numericValues.length === 0) { chartInfo.textContent = 'No numeric data for this column.'; return; }
+
+                    const min = Math.min(...numericValues);
+                    const max = Math.max(...numericValues);
+                    // Sturges' Formula for optimal number of bins: k = 1 + log2(N)
+                    const numBins = Math.ceil(1 + 3.322 * Math.log10(numericValues.length));
+                    const binSize = (max - min) / numBins;
+
+                    if (binSize === 0 || isNaN(binSize)) {
+                         chartInfo.textContent = 'All numeric values are the same; cannot draw histogram.';
+                         return;
+                    }
+                    
+                    const bins = Array(numBins).fill(0).map((_, i) => ({
+                        min: min + i * binSize,
+                        max: min + (i + 1) * binSize,
+                        count: 0
+                    }));
+
+                    numericValues.forEach(val => {
+                        let binIndex = Math.floor((val - min) / binSize);
+                        if (binIndex >= numBins) binIndex = numBins - 1; // Handle max value edge case
+                        bins[binIndex].count++;
+                    });
+
+                    chartData.labels = bins.map(b => `${b.min.toFixed(1)} - ${b.max.toFixed(1)}`);
+                    chartData.datasets = [{
+                        label: `Frequency of ${column}`,
+                        data: bins.map(b => b.count),
+                        backgroundColor: 'rgba(75, 192, 192, 0.8)',
+                        borderColor: 'rgba(75, 192, 192, 1)',
+                        borderWidth: 1
+                    }];
+
+                } else if (type === 'categorical' || type === 'date') {
+                    chartType = 'bar';
+                    infoText = 'Bar Chart: Shows the count of unique values.';
+                    const counts = {};
+                    originalData.forEach(row => {
+                        const val = row[column];
+                        if (val !== null && val !== undefined && String(val).trim() !== '') {
+                            let key = String(val).trim();
+                            if (type === 'date') {
+                                const dateObj = parseDate(val);
+                                key = dateObj ? dateObj.toLocaleDateString() : 'Invalid Date';
+                            }
+                            counts[key] = (counts[key] || 0) + 1;
+                        }
+                    });
+
+                    // Limit to top 20 for cleaner bar chart
+                    const sortedCounts = Object.entries(counts).sort(([, a], [, b]) => b - a).slice(0, 20);
+
+                    chartData.labels = sortedCounts.map(([key]) => key);
+                    chartData.datasets = [{
+                        label: `Count of ${column}`,
+                        data: sortedCounts.map(([, count]) => count),
+                        backgroundColor: 'rgba(153, 102, 255, 0.8)',
+                        borderColor: 'rgba(153, 102, 255, 1)',
+                        borderWidth: 1
+                    }];
+                }
+
+                chartInfo.textContent = infoText;
+
+                chartInstance = new Chart(ctx, {
+                    type: chartType,
+                    data: chartData,
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                title: {
+                                    display: true,
+                                    text: 'Count/Frequency'
+                                }
+                            },
+                            x: {
+                                title: {
+                                    display: true,
+                                    text: column
+                                }
+                            }
+                        },
+                        plugins: {
+                            legend: {
+                                display: false
+                            }
+                        }
+                    }
+                });
+            };
+
+            /**
+             * Populates all dropdowns and enables buttons after successful CSV load.
+             */
+            const populateControlPanels = () => {
+                // Prepare dropdowns
+                populateColumnSelect(groupBySelect, headers, ['categorical']);
+                populateColumnSelect(aggregateValueSelect, headers, ['numeric']);
+                populateColumnSelect(chartColumnSelect, headers, ['numeric', 'categorical', 'date']);
+                populateColumnSelect(dateColumnSelect, headers, ['date']);
+                populateColumnSelect(trendValueSelect, headers, ['numeric']);
+
+                // Enable buttons
+                runAnomalyDetectionButton.disabled = false;
+                runFilterButton.disabled = false;
+                runGroupByButton.disabled = false;
+                generateChartButton.disabled = false;
+                runTrendButton.disabled = false;
+            };
+
+            // --- Event Listeners ---
+            loadCsvButton.addEventListener('click', handleCsvUpload);
+            runAnomalyDetectionButton.addEventListener('click', runAnomalyDetection);
+            downloadAnomaliesButton.addEventListener('click', () => downloadCSV(anomalousRows, headers, 'anomalies_data.csv'));
+            downloadFilteredButton.addEventListener('click', () => {
+                // Get data from the currently displayed filtered table
+                const filtered = Array.from(filteredDataContainer.querySelector('tbody').rows).map(row => {
+                    const rowData = {};
+                    headers.forEach((h, i) => { rowData[h] = row.cells[i].textContent; });
+                    return rowData;
+                });
+                downloadCSV(filtered, headers, 'filtered_data.csv');
+            });
+            runFilterButton.addEventListener('click', runFilter);
+            runGroupByButton.addEventListener('click', runGroupBy);
+            generateChartButton.addEventListener('click', generateChart);
+            runTrendButton.addEventListener('click', runTrendAnalysis);
+        });
+    </script>
+</body>
+</html>
